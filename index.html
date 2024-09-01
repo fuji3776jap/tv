@@ -1,1 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>m3u8 Player</title>
+    <style>
+        body {
+            font-family: 'Hiragino Kaku Gothic Pro', 'ヒラギノ角ゴ Pro W3', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding-top: 10px;
+            background-color: #121212;
+            color: #ffffff;
+        }
+        #player {
+            width: 80%;
+            max-width: 800px;
+            margin-bottom: 20px;
+            border: 3px solid gray;
+        }
+        #channelList {
+            width: 80%;
+            max-width: 800px;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .dark-mode {
+            background-color: #121212;
+            color: #ffffff;
+        }
+        .light-mode {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .button-container button {
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+        #packetCount {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <video id="player" controls autoplay></video>
+    <select id="channelList"></select>
+    <div class="button-container">
+        <button id="modeToggle">ライトモード</button>
+        <button id="pipToggle">PiPモード</button>
+        <button id="muteToggle">ミュート</button>
+        <button id="playPauseToggle">再生/一時停止</button>
+        <button id="fullscreenToggle">全画面表示</button>
+    </div>
+    <div id="packetCount">パケット数: 0 kbps</div>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        const channels = [
+            { name: "NHK G (Tokyo)", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd01" },
+            { name: "NHK G (Osaka)", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gx06" },
+            { name: "NHK E", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd02" },
+            { name: "Nippon TV (日テレ)", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd03" },
+            { name: "日テレNEWS24", url: "https://n24-cdn-live.ntv.co.jp/ch01/index.m3u8" },
+            { name: "TV Asahi", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd06" },
+            { name: "TBS", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd04" },
+            { name: "TV Tokyo", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd07" },
+            { name: "Fuji TV (フジテレビ)", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd05" },
+            { name: "Tokyo MX1", url: "http://cdns.jp-primehome.com:8000/zhongying/live/playlist.m3u8?cid=gd08" },
+            { name: "QVC", url: "https://cdn-live1.qvc.jp/iPhone/1501/1501.m3u8" },
+            { name: "Shop Channel", url: "https://stream3.shopch.jp/HLS/master.m3u8" }
+        ];
 
+        const video = document.getElementById('player');
+        const channelList = document.getElementById('channelList');
+        const modeToggle = document.getElementById('modeToggle');
+        const pipToggle = document.getElementById('pipToggle');
+        const muteToggle = document.getElementById('muteToggle');
+        const playPauseToggle = document.getElementById('playPauseToggle');
+        const fullscreenToggle = document.getElementById('fullscreenToggle');
+        const packetCount = document.getElementById('packetCount');
+        const body = document.body;
+
+        let packetCounter = 0;
+        let packetSize = 0;
+
+        channels.forEach(channel => {
+            const option = document.createElement('option');
+            option.value = channel.url;
+            option.textContent = channel.name;
+            channelList.appendChild(option);
+        });
+
+        channelList.addEventListener('change', function() {
+            loadChannel(this.value);
+        });
+
+        function loadChannel(url) {
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                });
+                hls.on(Hls.Events.FRAG_LOADED, function(event, data) {
+                    packetCounter++;
+                    packetSize += data.stats.total;
+                    updatePacketCount();
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('canplay', function() {
+                    video.play();
+                });
+            }
+        }
+
+        function updatePacketCount() {
+            const kbps = (packetSize * 8) / 1000;
+            const mbps = kbps / 1000;
+            packetCount.textContent = `パケット数: ${kbps.toFixed(2)} kbps / ${mbps.toFixed(2)} mbps`;
+        }
+
+        // 初期ロード時に最初のチャンネルを再生
+        loadChannel(channels[0].url);
+
+        // モード切り替え
+        modeToggle.addEventListener('click', function() {
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                body.classList.add('light-mode');
+                modeToggle.textContent = 'ダークモード';
+            } else {
+                body.classList.remove('light-mode');
+                body.classList.add('dark-mode');
+                modeToggle.textContent = 'ライトモード';
+            }
+        });
+
+        // PiPモード切り替え
+        pipToggle.addEventListener('click', function() {
+            if (document.pictureInPictureElement) {
+                document.exitPictureInPicture();
+            } else {
+                video.requestPictureInPicture();
+            }
+        });
+
+        // ミュート切り替え
+        muteToggle.addEventListener('click', function() {
+            video.muted = !video.muted;
+            muteToggle.textContent = video.muted ? 'ミュート解除' : 'ミュート';
+        });
+
+        // 再生/一時停止切り替え
+        playPauseToggle.addEventListener('click', function() {
+            if (video.paused) {
+                video.play();
+                playPauseToggle.textContent = '一時停止';
+            } else {
+                video.pause();
+                playPauseToggle.textContent = '再生';
+            }
+        });
+
+        // 全画面表示切り替え
+        fullscreenToggle.addEventListener('click', function() {
+            if (!document.fullscreenElement) {
+                video.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // パケット数の監視
+        setInterval(updatePacketCount, 1000);
+    </script>
+</body>
+</html>
